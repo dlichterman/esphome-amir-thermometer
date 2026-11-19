@@ -44,6 +44,30 @@ Each configured channel gives you two entities:
 
 If a sensor goes silent for `timeout` (default 5 min), its temperature becomes *unknown*. Sensors you haven't configured are still logged, as `Unconfigured channel N: ...`, so you can find them.
 
+## Home Assistant alerts
+
+[home-assistant/](home-assistant/) has a blueprint that alerts when a temperature stays out of range, tells you when it's back in range, and warns when a sensor goes silent.
+
+1. Import the blueprint: in Home Assistant go to **Settings → Automations & Scenes → Blueprints → Import Blueprint** and paste:
+
+   ```text
+   https://github.com/dlichterman/esphome-amir-thermometer/blob/main/home-assistant/blueprints/automation/amir/temperature_threshold_alert.yaml
+   ```
+
+   Or copy it to `config/blueprints/automation/amir/` yourself.
+2. Create one automation from it per sensor, or start from [automations.example.yaml](home-assistant/automations.example.yaml). The example has a fridge (33–41 °F), a freezer (−22 to 10 °F) and a battery-low alert. Replace `notify.mobile_app_your_phone` with your own notify service.
+
+The blueprint has these settings:
+
+| Input | Default | What it does |
+|---|---|---|
+| Low / high threshold | — | Uses the unit Home Assistant displays for the sensor (°F or °C) |
+| Time out of range | 15 min | Rides out door openings and defrost cycles |
+| Time unknown/unavailable | 15 min | Alerts if the receiver or a sensor stops reporting |
+| Notify action | — | Any action; can use `{{ title }}` and `{{ message }}` |
+
+An all-clear is sent only after a real alert, once the temperature has been back in range for 2 minutes.
+
 ## Configuration
 
 ```yaml
