@@ -1,0 +1,111 @@
+blueprint:
+  name: AMIR thermometer – temperature threshold alert
+  description: >
+    Alerts when a fridge/freezer temperature stays above or below a threshold
+    for a while, when it comes back into range, and when the sensor goes silent
+    (the ESPHome component marks it unknown after its `timeout`, 5 min by default).
+    Thresholds use the unit Home Assistant shows for the sensor (°C or °F).
+    Your notify action can use {{ message }} and {{ title }}.
+  domain: automation
+  source_url: https://github.com/dlichterman/esphome-amir-thermometer/blob/main/home-assistant/blueprints/automation/amir/temperature_threshold_alert.yaml
+  input:
+    temperature_sensor:
+      name: Temperature sensor
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: temperature
+    appliance_name:
+      name: Appliance name
+      description: Used in the message, e.g. "Fridge" or "Freezer".
+      default: Fridge
+    low_threshold:
+      name: Low threshold
+      description: Alert when the temperature stays below this.
+      selector:
+        number:
+          min: -40
+          max: 120
+          step: 0.5
+          mode: box
+    high_threshold:
+      name: High threshold
+      description: Alert when the temperature stays above this.
+      selector:
+        number:
+          min: -40
+          max: 120
+          step: 0.5
+          mode: box
+    duration:
+      name: Time out of range before alerting
+      description: Rides out door openings and defrost cycles.
+      default: { minutes: 15 }
+      selector:
+        duration: {}
+    offline_duration:
+      name: Time unknown/unavailable before alerting
+      default: { minutes: 15 }
+      selector:
+        duration: {}
+    notify_action:
+      name: Notify action
+      description: What to run. Use {{ title }} and {{ message }} in it.
+      selector:
+        action: {}
+
+mode: parallel
+max: 5
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input temperature_sensor
+    above: !input high_threshold
+    for: !input duration
+    id: high
+  - trigger: numeric_state
+    entity_id: !input temperature_sensor
+    below: !input low_threshold
+    for: !input duration
+    id: low
+  - trigger: state
+    entity_id: !input temperature_sensor
+    to: [unknown, unavailable]
+    for: !input offline_duration
+    id: offline
+
+variables:
+  sensor: !input temperature_sensor
+  appliance: !input appliance_name
+  low: !input low_threshold
+  high: !input high_threshold
+  unit: "{{ state_attr(sensor, 'unit_of_measurement') or '' }}"
+  title: "{{ appliance }} temperature"
+  message: >-
+    {% set t = trigger.to_state.state %}
+    {% if trigger.id == 'high' %}
+      {{ appliance }} is too warm: {{ t }}{{ unit }} (above {{ high }}{{ unit }}).
+    {% elif trigger.id == 'low' %}
+      {{ appliance }} is too cold: {{ t }}{{ unit }} (below {{ low }}{{ unit }}).
+    {% else %}
+      {{ appliance }} sensor has gone silent. Check the receiver or the sensor batteries.
+    {% endif %}
+
+actions:
+  - sequence: !input notify_action
+  # After a too-warm/too-cold alert, wait for it to settle back in range,
+  # then send an all-clear. (No all-clear for blips that never alerted.)
+  - if:
+      - condition: template
+        value_template: "{{ trigger.id in ['high', 'low'] }}"
+    then:
+      - wait_for_trigger:
+          - trigger: numeric_state
+            entity_id: !input temperature_sensor
+            above: !input low_threshold
+            below: !input high_threshold
+            for: { minutes: 2 }
+      - variables:
+          message: "{{ appliance }} is back in range: {{ states(sensor) }}{{ unit }}."
+      - sequence: !input notify_action

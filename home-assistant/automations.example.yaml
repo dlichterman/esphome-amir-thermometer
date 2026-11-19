@@ -1,0 +1,59 @@
+# Example automations for the AMIR thermometer. Copy into your automations.yaml
+# (or create them in Settings > Automations > Blueprints after importing the blueprint).
+# Entity IDs assume the repo's example config: device friendly_name "AMIR Thermometer",
+# entities "Sensor 1/2 Temperature" and "Sensor 1/2 Battery Low". Check yours in
+# Settings > Devices > AMIR Thermometer if you renamed anything.
+#
+# Thresholds are in whatever unit HA *displays* for the sensor. The values below are °F.
+# Replace notify.mobile_app_your_phone with your own notify service.
+
+- id: amir_sensor_1_threshold
+  alias: "Fridge temperature alert"
+  use_blueprint:
+    path: amir/temperature_threshold_alert.yaml
+    input:
+      temperature_sensor: sensor.amir_thermometer_sensor_1_temperature
+      appliance_name: Fridge
+      low_threshold: 33
+      high_threshold: 41
+      duration: { minutes: 15 }
+      offline_duration: { minutes: 15 }
+      notify_action:
+        - action: notify.mobile_app_your_phone
+          data:
+            title: "{{ title }}"
+            message: "{{ message }}"
+
+- id: amir_sensor_2_threshold
+  alias: "Freezer temperature alert"
+  use_blueprint:
+    path: amir/temperature_threshold_alert.yaml
+    input:
+      temperature_sensor: sensor.amir_thermometer_sensor_2_temperature
+      appliance_name: Freezer
+      low_threshold: -22
+      high_threshold: 10
+      duration: { minutes: 20 }
+      offline_duration: { minutes: 15 }
+      notify_action:
+        - action: notify.mobile_app_your_phone
+          data:
+            title: "{{ title }}"
+            message: "{{ message }}"
+
+- id: amir_battery_low
+  alias: "AMIR thermometer battery low"
+  mode: queued
+  triggers:
+    - trigger: state
+      entity_id:
+        - binary_sensor.amir_thermometer_sensor_1_battery_low
+        - binary_sensor.amir_thermometer_sensor_2_battery_low
+      from: "off"
+      to: "on"
+      for: { minutes: 10 }
+  actions:
+    - action: notify.mobile_app_your_phone
+      data:
+        title: "Thermometer battery low"
+        message: "{{ trigger.to_state.name }}: replace the batteries."
