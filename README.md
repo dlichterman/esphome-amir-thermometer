@@ -4,6 +4,7 @@ This is an ESPHome external component and example config for an ESP32 and a CC11
 
 ## Hardware
 
+- [AMIR wireless fridge/freezer thermometer](https://www.amazon.com/dp/B09H593JS9) (the model this was decoded from)
 - ESP32 DevKit V1 (any ESP32 should work; change `board:`)
 - A CC1101 module tuned for 433 MHz, with its antenna
 
