@@ -1,0 +1,90 @@
+# ESP32 + CC1101 receiver for AMIR wireless fridge/freezer thermometers (433.92 MHz).
+# Copy this into your ESPHome config folder (or use it as a template for a dashboard device).
+# Values you're likely to change are in substitutions:.
+
+substitutions:
+  name: amir-thermometer
+  friendly_name: AMIR Thermometer
+  # ESP32 <-> CC1101 wiring
+  cc1101_clk_pin: GPIO18
+  cc1101_miso_pin: GPIO19
+  cc1101_mosi_pin: GPIO23
+  cc1101_cs_pin: GPIO22
+  cc1101_gdo2_pin: GPIO4   # CC1101 GDO2 = demodulated data out -> remote_receiver
+  # CC1101 crystals are rarely exact; nudge by 0.01-0.05 MHz if reception is weak.
+  cc1101_frequency: 433.92MHz
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+      - cc1101.begin_rx
+
+esp32:
+  board: esp32doit-devkit-v1
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: ${friendly_name} Fallback
+
+captive_portal:
+
+external_components:
+  - source: github://dlichterman/esphome-amir-thermometer@main
+    components: [amir_thermometer]
+  # To build from a local checkout instead (e.g. while changing the component):
+  # - source:
+  #     type: local
+  #     path: components
+  #   components: [amir_thermometer]
+
+spi:
+  clk_pin: ${cc1101_clk_pin}
+  miso_pin: ${cc1101_miso_pin}
+  mosi_pin: ${cc1101_mosi_pin}
+
+cc1101:
+  cs_pin: ${cc1101_cs_pin}
+  frequency: ${cc1101_frequency}
+  modulation_type: ASK/OOK
+  filter_bandwidth: 325kHz   # wide: cheap sensors drift off 433.92
+  symbol_rate: 5000
+
+remote_receiver:
+  id: rf_rx
+  pin: ${cc1101_gdo2_pin}
+  filter: 150us   # AMIR's shortest pulse is ~250 us; this drops most OOK noise
+  idle: 4ms       # longest in-message gap is ~750 us; groups are 120 ms apart
+  # dump: raw     # uncomment to see raw pulses in the log when debugging
+
+amir_thermometer:
+  receiver_id: rf_rx
+  timeout: 5min   # temperature goes "unknown" if a sensor is silent this long
+  sensors:
+    - channel: 1
+      temperature:
+        name: "Sensor 1 Temperature"
+      battery_low:
+        name: "Sensor 1 Battery Low"
+    - channel: 2
+      temperature:
+        name: "Sensor 2 Temperature"
+      battery_low:
+        name: "Sensor 2 Battery Low"
